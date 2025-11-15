@@ -1,134 +1,126 @@
-#include <iostream>
-#include <vector>
+п»ї#include <iostream>
 #include <thread>
+#include <mutex>
+#include <vector>
 #include <chrono>
+#include <random>
 
-// Расчёт суммы двух векторов
-template <typename T>
-void sumVector(const std::vector<T>& vector1, const std::vector<T>& vector2, std::vector<T>& results,
-	size_t lastIndex, size_t firstIndex = 0);
+// РџСЂРѕРІРµСЂРєР° РЅР° РєРѕСЂСЂРµРєС‚РЅС‹Р№ РІРІРѕРґ
+void checkingForCorrectInput(int& input);
 
-// Запуск расчёта суммы векторов в нескольких потоках
-long long launchingCalculations(long numberElementsInVector, int numberThreads);
+// Р“РµРЅРµСЂР°С†РёСЏ СЃР»СѓС‡Р°Р№РЅРѕРіРѕ С‡РёСЃР»Р°
+int deneratingRandomNumber(int min, int max);
 
-// Вывод таблицы
-void tableOutput(const std::vector<std::vector<long long>>& resultsTable, const std::vector<long>& sizes,
-	const std::vector<int>& threadsCount);
+void draw(int operationNumber, std::mutex& coutMutex, int totalLength);
 
 int main()
 {
-	// Подключение Русского языка для консоли
+	// РџРѕРґРєР»СЋС‡РµРЅРёРµ Р СѓСЃСЃРєРѕРіРѕ СЏР·С‹РєР°
 	setlocale(LC_ALL, "rus");
 
-	// Вывод количества аппаратных ядер
-	std::cout << "Количество аппаратных ядер - " << std::thread::hardware_concurrency() << std::endl;
-	std::cout << std::endl;
+	// РњСЊСЋС‚РµРєСЃ РґР»СЏ cout
+	std::mutex coutMutex;
 
-	std::vector<long> sizes = { 1000, 10000, 100000, 1000000 };
-	std::vector<int> threadsCount = { 1, 2, 4, 8, 16 };
+	// Р—Р°РїСЂРѕСЃ РєРѕР»РёС‡РµСЃС‚РІР° РїРѕС‚РѕРєРѕРІ
+	int numberThreads{};
+	std::cout << "Р’РІРµРґРёС‚Рµ РєРѕР»РёС‡РµСЃС‚РІРѕ РїРѕС‚РѕРєРѕРІ: ";
+	checkingForCorrectInput(numberThreads);
 
-	// Создаём таблицу для хранения результатов
-	std::vector<std::vector<long long>> resultsTable(sizes.size(), std::vector<long long>(threadsCount.size()));
+	// РћС‚С‡РёС‰Р°РµРј РєРѕРЅСЃРѕР»СЊ
+	std::cout << "\033[2J\033[3J\033[H";
+	std::cout.flush();
 
-	// Заполнение таблицы
-	for (size_t index{}; index < sizes.size(); index++)
+	// Р’С‹РІРѕРґ С€Р°РїРєРё
+	std::cout << "#\tid\tProgress Bar\tTime" << std::endl;
+
+	// Р”Р»РёРЅР° РїСЂРѕРіСЂРµСЃСЃ-Р±Р°СЂР°
+	const int progressBarLength = 11;
+
+	// Р—Р°РїСѓСЃРє РїРѕС‚РѕРєРѕРІ
+	std::vector<std::thread> streams;
+	for (size_t index{}; index < numberThreads; index++)
 	{
-		for (size_t index2{}; index2 < threadsCount.size(); index2++)
-		{
-			try
-			{
-				resultsTable[index][index2] = launchingCalculations(sizes[index], threadsCount[index2]);
-			}
-			catch (const std::exception& e)
-			{
-				std::cout << "Ошибка при заполнении таблицы: " << e.what() << std::endl;
-				// помечаем ошибку
-				resultsTable[index][index2] = -1; 
-			}
-		}
+		streams.push_back(std::thread(draw, index, std::ref(coutMutex),
+			std::ref(progressBarLength)));
 	}
 	
-	// Вывод таблицы
-	tableOutput(resultsTable, sizes, threadsCount);
+	// РћР¶РёРґР°РµРј Р·Р°РІРµСЂС€РµРЅРёРµ РІСЃРµС… РїРѕС‚РѕРєРѕРІ
+	for (auto& thread : streams)
+	{
+		thread.join();
+	}
+
+	// Р’С‹РІРѕРґРёРј СЃРѕРѕР±С‰РµРЅРёРµ Рѕ Р·Р°РІРµСЂС€РµРЅРёРё СЂР°Р±РѕС‚С‹ СЃ РјСЊСЋС‚РµРєСЃРѕРј
+	std::lock_guard<std::mutex> lock(coutMutex);
+	std::cout << "\nР’СЃРµ РїРѕС‚РѕРєРё Р·Р°РІРµСЂС€РёР»Рё СЂР°Р±РѕС‚Сѓ!" << std::endl;
 
 
 	return EXIT_SUCCESS;
 }
 
-template <typename T>
-void sumVector(const std::vector<T>& vector1, const std::vector<T>& vector2, std::vector<T>& results,
-	size_t lastIndex, size_t firstIndex)
+void checkingForCorrectInput(int& input)
 {
-	// Проверка на одинаковый размер векторов
-	if (vector1.size() != vector2.size())
+	while ((!(std::cin >> input)) || input < 0)
 	{
-		throw std::invalid_argument("Векторы должны быть одинакового размера!");
-	}
+		// РЎР±СЂРѕСЃ РЅРµРєРѕСЂСЂРµРєС‚РЅРѕРіРѕ РІРІРѕРґР°
+		std::cin.clear();
+		std::cin.ignore();
 
-	// Операция сложения
-	for (size_t index{ firstIndex }; index < lastIndex; index++)
-	{
-		results[index] = vector1[index] + vector2[index];
+		std::cout << "Р’С‹ РІРІРµР»Рё РЅРµРєРѕСЂСЂРµРєС‚РЅРѕРµ Р·РЅР°С‡РµРЅРёРµ!" << std::endl;
+		std::cout << "РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·: ";
 	}
 }
 
-long long launchingCalculations(long numberElementsInVector, int numberThreads)
+int deneratingRandomNumber(int min, int max)
 {
-	// Проверка на отрицательные значения
-	if (numberElementsInVector < 0 || numberThreads < 0)
-	{
-		throw std::invalid_argument("Количество элементов вектора или потоков должно быть положительным!");
-	}
+	static std::random_device rd;
+	static std::mt19937 gen(rd());
+	std::uniform_int_distribution<int> dist(min, max);
 
-	// Расчёт количества элементов для каждого потока
-	int numberElementsForEachStream{ numberElementsInVector / numberThreads };
-
-	std::vector<int> vector1(numberElementsInVector, 0);
-	std::vector<int> vector2(numberElementsInVector, 1);
-	std::vector<int> results(numberElementsInVector);
-	std::vector<std::thread> TV;
-
-	// Засекаем время начала
-	auto startTime{ std::chrono::high_resolution_clock::now() };
-
-	for (size_t i{}; i < numberThreads; i++)
-	{
-		size_t startIndex{ i * numberElementsForEachStream };
-		size_t endIndex = (i == numberThreads - 1) ? numberElementsInVector : (i + 1) * numberElementsForEachStream;
-
-		TV.push_back(std::thread(sumVector<int>, std::ref(vector1), std::ref(vector2), 
-                        std::ref(results), startIndex, endIndex));
-	}
-
-	// Ждём завершение всех потоков
-	for (auto& thread : TV)
-	{
-		thread.join();
-	}
-
-	// Засекаем время окончания
-	auto endTime{ std::chrono::high_resolution_clock::now() };
-
-
-	return std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+	return dist(gen);
 }
 
-void tableOutput(const std::vector<std::vector<long long>>& resultsTable, const std::vector<long>& sizes,
-	const std::vector<int>& threadsCount)
+void draw(int operationNumber, std::mutex& coutMutex, int totalLength)
 {
-	for (size_t index{}; index < sizes.size(); index++)
-	{
-		std::cout << "\t" << sizes[index];
-	}
-	std::cout << std::endl;
+	// РћРїСЂРµРґРµР»СЏРµРј РїРѕР·РёС†РёСЋ СЃС‚СЂРѕРєРё РІ РєРѕРЅСЃРѕР»Рё
+	int rowPosition{ operationNumber + 2 };
 
-	for (size_t index{}; index < threadsCount.size(); index++)
+	// РќР°С‡Р°Р»Рѕ РѕС‚СЃС‡РµС‚Р° РІСЂРµРјРµРЅРё
+	auto startTime{ std::chrono::steady_clock::now() };
+
+	for (int progress{ 1 }; progress <= totalLength; progress++)
 	{
-		std::cout << threadsCount[index];
-		for (size_t index2{}; index2 < sizes.size(); index2++)
-		{
-			std::cout << "\t" << resultsTable[index2][index] << " мс";
-		}
-		std::cout << std::endl;
+		// Р—Р°СЃС‹РїР°РµС‚ РЅР° СЃР»СѓС‡Р°Р№РЅРѕРµ РІСЂРµРјСЏ
+		// РњРёРЅРёРјСѓРј - 70 РјСЃ
+		// РњР°РєСЃРёРјСѓРј - 250 РјСЃ
+		std::this_thread::sleep_for(std::chrono::milliseconds(deneratingRandomNumber(70, 250)));
+
+		// Р—Р°С…РІР°С‚С‹РІР°РµРј РјСЊСЋС‚РµРєСЃ
+		std::lock_guard<std::mutex> lock(coutMutex);
+
+		// РџРµСЂРµРјРµС‰Р°РµРј РєСѓСЂСЃРѕСЂ РЅР° СЃРІРѕСЋ СЃС‚СЂРѕРєСѓ
+		std::cout << "\033[" << rowPosition << ";1H";
+
+		// Р’С‹РІРѕРґРёРј РІСЃСЋ СЃС‚СЂРѕРєСѓ Р·Р°РЅРѕРІРѕ
+		std::cout << operationNumber << "\t" << std::this_thread::get_id() << "\t[";
+
+		// РџСЂРѕРіСЂРµСЃСЃ-Р±Р°СЂ
+		for (int i{}; i < progress; i++) { std::cout << "="; }
+		for (int i{ progress }; i < totalLength; i++) std::cout << " ";
+		std::cout << "]" << std::flush;
+	}
+
+	// РљРѕРЅРµС† РѕС‚СЃС‡РµС‚Р° РІСЂРµРјРµРЅРё
+	auto endTime{ std::chrono::steady_clock::now() };
+	// РџРѕРґСЃС‡С‘С‚ СЃРєРѕР»СЊРєРѕ РІСЃРµРіРѕ РІСЂРµРјРµРЅРё Р±С‹Р»Рѕ РїРѕС‚СЂР°С‡РµРЅРѕ РЅР° РѕРїРµСЂР°С†РёСЋ
+	auto duration{ std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime) };
+
+	// Р’С‹РІРѕРґ СЃС‚СЂРѕРєРё СЃ РІСЂРµРјРµРЅРµРј
+	{
+		std::lock_guard<std::mutex> lock(coutMutex);
+		std::cout << "\033[" << rowPosition << ";1H";
+		std::cout << operationNumber << "\t" << std::this_thread::get_id() << "\t[";
+		for (int i = 0; i < totalLength; i++) std::cout << "=";
+		std::cout << "]\t" << duration.count() << "ms" << std::endl;
 	}
 }
